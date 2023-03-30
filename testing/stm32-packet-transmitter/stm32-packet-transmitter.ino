@@ -4,8 +4,7 @@ void setup() {
 }
 
 void loop() {
-  for (unsigned char i = 1; i < 100; i++) Serial.print((byte) i);
-  Serial.print('\0');
-  Serial.flush();
-  delay(1000);
+  while (Serial.available() > 0){
+    Serial.write(Serial.read());
+  }
 }
