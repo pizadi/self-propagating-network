@@ -1,4 +1,4 @@
-#include <LiquidCrystal_I2C.h>
+//#include <LiquidCrystal_I2C.h>
 
 #define BAUD 9600
 #define RXPIN 4
@@ -14,7 +14,7 @@ byte packet[100];
 unsigned char packetPointer = 0;
 char lineBuffer[21];
 uint8_t icon = 0;
-LiquidCrystal_I2C lcd(0x27, 20, 4);
+//LiquidCrystal_I2C lcd(0x27, 20, 4);
 bool rcv = false;
 uint32_t timeouts = 0, packets = 0;
 
@@ -31,8 +31,8 @@ void pingLCD(){
     t = '.';
     break;
   }
-  lcd.setCursor(19,3);
-  lcd.write(t);
+//  lcd.setCursor(19,3);
+//  lcd.write(t);
   icon = (icon + 1) % 2;
 }
 
@@ -57,23 +57,26 @@ void errWipe(){
   packetPointer = 0;
   avgT = avgT * (1 - DELTA) + DELTA * TIMEOUT;
   updateLCD();
-  lcd.setCursor(19,3);
-  lcd.write('!');
+//  lcd.setCursor(19,3);
+//  lcd.write('!');
 }
 
 void updateLCD(){
   sprintf(lineBuffer, "Loss:    %06.2f %%", dataCorruption);
-  lcd.setCursor(0,0);
-  lcd.printstr(lineBuffer);
+  Serial.println(lineBuffer);
+//  lcd.setCursor(0,0);
+//  lcd.printstr(lineBuffer);
   sprintf(lineBuffer, "Delay:   %06.3f s", avgT);
-  lcd.setCursor(0,1);
-  lcd.printstr(lineBuffer);
+  Serial.println(lineBuffer);
+//  lcd.setCursor(0,1);
+//  lcd.printstr(lineBuffer);
   float loss;
   if (packets > 0) loss = 100. * timeouts / packets;
   else loss = 0.;
   sprintf(lineBuffer, "Timeout: %6.2f %%", loss);
-  lcd.setCursor(0,2);
-  lcd.printstr(lineBuffer);
+  Serial.println(lineBuffer);
+//  lcd.setCursor(0,2);
+//  lcd.printstr(lineBuffer);
 }
 
 void onReceiveFunction(void) {
@@ -93,9 +96,9 @@ void onReceiveFunction(void) {
 }
 
 void setup() {
-  lcd.init();
-  lcd.backlight();
-  lcd.clear();
+//  lcd.init();
+//  lcd.backlight();
+//  lcd.clear();
   Serial.begin(9600);
   Serial1.begin(BAUD, SERIAL_8N1, RXPIN, TXPIN);
   Serial1.onReceive(onReceiveFunction, true);
