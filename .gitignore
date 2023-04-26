@@ -3,3 +3,8 @@ prototyping/*
 */esp32-*/build
 */esp32-*/.vscode
 */esp32-*/sdkconfig*
+
+*__pycache__*
+
+testing/python-serial/data.bin
+testing/python-serial/data.bin
