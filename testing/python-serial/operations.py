@@ -8,7 +8,7 @@ pkt_type_dict = {
     3 : "NACK"
 }
 
-netkey = b'150fhdelbg'
+netkey = b'\x01\x02\x03\x04'
 
 def listen(outputfile: str) -> None:
     # listing the available COM ports
@@ -62,9 +62,10 @@ def listen(outputfile: str) -> None:
             while (len(databuffer) >= 16):
                 res = verifyIV(databuffer, netkey)
                 if (res['VALID'] == 'VALID'):
-                    print(f'[INFO] Valid {res['TYPE']} package received.')
+                    databuffer = databuffer[16:]
+                    print(f'[INFO] Valid {res["TYPE"]} package received.')
                     if (res['TYPE'] == 'MSG'):
-                        print(f'[INFO] Receiving {res['LENGTH']} bytes of data.')
+                        print(f'[INFO] Receiving {res["LENGTH"]} bytes of data.')
                         msg_pkt = b''
                         for _ in range(res['LENGTH']):
                             # TODO
@@ -81,9 +82,7 @@ def listen(outputfile: str) -> None:
                     elif (res['TYPE'] == 'NACK'):
                         # TODO
                         pass
-                        
-                elif (res['VALID'] == 'CORRUPT'):
-                    print('[WARNING] Corrupt packet header received')
+
                 elif (res['VALID'] == 'INVALID'):
                     print('[WARNING] Invalid data discarded.')
                     databuffer = databuffer[1:]
@@ -97,26 +96,43 @@ def listen(outputfile: str) -> None:
     except KeyboardInterrupt:
         print(f'Interrupt signal received. Quitting...')
         return
-    except:
-        print(f'Unknown error occured while logging. Quitting...')
-        return
 
 def verifyIV(block: bytes, netkey: bytes) -> dict:
     out = dict()
+    out['VALID'] = 'VALID'
+
     if (len(block) != 16):
-        out['VALID'] = 'VALID'
+        out['VALID'] = 'INCOMPLETE'
         return out
-    elif (block[2:6] != netkey):
-        out['VALID'] = 'FOREIGN'
-        return out
+    elif (block[2:6] == netkey):
+        if (block[0] in pkt_type_dict):
+            out['TYPE'] = pkt_type_dict[block[0]]
+            if (out['TYPE'] == 'MSG'):
+                out['LENGTH'] = block[1]
+            elif (block[1] > 0):
+                out['VALID'] = 'INVALID'
+        else:
+            out['VALID'] = 'INVALID'
     else:
         out['VALID'] = 'INVALID'
+        return out
+    
+    return out
+
+
+    if (len(block) != 16):
+        out['VALID'] = 'INVALID'
+        return out
     
     pkt_type = block[0]
     if (pkt_type in pkt_type_dict):
         out['TYPE'] = pkt_type_dict[pkt_type]
     else:
-        out['VALID'] = 'CORRUPT'
+        out['VALID'] = 'INVALID'
+        return out
+
+    if (block[2:6] != netkey):
+        out['VALID'] = 'FOREIGN'
         return out
     
     if (out['TYPE'] == 'MSG'):
