@@ -1,1 +1,5 @@
-./prototyping/*
+prototyping/*
+
+*/esp32-*/build
+*/esp32-*/.vscode
+*/esp32-*/sdkconfig*
