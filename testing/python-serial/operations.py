@@ -1,14 +1,18 @@
 import serial
+import time
 from serial.tools.list_ports import comports
 
 pkt_type_dict = {
-    0 : "CHECK",
+    0 : "NONE",
     1 : "MSG",
-    2 : "ACK",
-    3 : "NACK"
+    2 : "CHECK",
+    3 : "ACK",
+    4 : "NACK"
 }
 
+timeout = 500
 netkey = b'\x01\x02\x03\x04'
+aeskey = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 
 def listen(outputfile: str) -> None:
     # listing the available COM ports
@@ -50,44 +54,73 @@ def listen(outputfile: str) -> None:
     print(f'Logging input data to {outputfile}...')
 
     databuffer = b''
+    packetbuffer = b''
+    payloadbuffer = b''
+    lst_time = 0
     try:
         # receiving data and logging it into the target file
+        state = {'TYPE' : 'NONE', 'LEN' : 0}
         while (True):
             data = ser.read()
             if (data):
+                lst_time = time.time()
                 databuffer += data
                 f = open(outputfile, 'ab')
                 f.write(data)
                 f.close()
-            while (len(databuffer) >= 16):
-                res = verifyIV(databuffer, netkey)
-                if (res['VALID'] == 'VALID'):
-                    databuffer = databuffer[16:]
-                    print(f'[INFO] Valid {res["TYPE"]} package received.')
-                    if (res['TYPE'] == 'MSG'):
-                        print(f'[INFO] Receiving {res["LENGTH"]} bytes of data.')
-                        msg_pkt = b''
-                        for _ in range(res['LENGTH']):
-                            # TODO
+
+            if (len(databuffer) > 0):
+                if (state['TYPE'] == 'NONE'):
+                    if (databuffer[0] in pkt_type_dict):
+                        state['TYPE'] = pkt_type_dict[databuffer[0]]
+                        if (state['TYPE'] == 'CHECK'):
+                            state['LEN'] = 8
+                        elif (state['TYPE'] == 'MSG'):
+                            state['LEN'] = 15
+                        elif (state['TYPE'] == 'ACK'):
+                            state['LEN'] = 15
+                        elif (state['TYPE'] == 'NACK'):
+                            state['LEN'] = 15
+                    packetbuffer = b'' + databuffer[:1]
+                elif (state['TYPE'] == 'PAYLOAD'):
+                    payloadbuffer += databuffer[:1]
+                    state['LEN'] -= 1
+                elif (state['LEN'] > 0):
+                    packetbuffer += databuffer[:1]
+                    state['LEN'] -= 1
+                
+                if (state['TYPE'] == 'PAYLOAD' and state['LEN'] == 0):
+                    payload = parsepayload(payloadbuffer, packetbuffer, aeskey)
+                    print(f'[INFO] Received {payload}')
+                    payloadbuffer = b''
+                    state['TYPE'] = 'NONE'
+                    state['LEN'] = 0
+
+                elif (state['TYPE'] != 'NONE' and state['LEN'] == 0):
+                    res = verifyIV(packetbuffer, netkey)
+                    if (res['VALID'] == 'VALID'):
+                        print(f'[INFO] Valid {res["TYPE"]} package received.')
+                        if (res['TYPE'] == 'MSG'):
+                            state['TYPE'] = 'PAYLOAD'
+                            state['LEN'] = res['LEN']
+                            print(f'[INFO] Receiving {res["LEN"]} bytes.')
+                        elif (res['TYPE'] == 'CHECK'):
+                            state['TYPE'] = 'NONE'
+                            state['LEN'] = 0
+                        elif (res['TYPE'] == 'ACK'):
                             pass
-
-                    elif (res['TYPE'] == 'CHECK'):
-                        # TODO
-                        pass
-                    
-                    elif (res['TYPE'] == 'ACK'):
-                        # TODO
-                        pass
-
-                    elif (res['TYPE'] == 'NACK'):
-                        # TODO
-                        pass
-
-                elif (res['VALID'] == 'INVALID'):
-                    print('[WARNING] Invalid data discarded.')
-                    databuffer = databuffer[1:]
-                else:
-                    databuffer = databuffer[1:]
+                        elif (res['TYPE'] == 'NACK'):
+                            pass
+                    else:
+                        print('[WARNING] Invalid data discarded.')
+                        state['TYPE'] = 'NONE'
+                
+                databuffer = databuffer[1:]
+        
+            if (state['TYPE'] != 'NONE' and time.time() - lst_time > 1.):
+                state['TYPE'] = 'NONE'
+                state['LEN'] = 0
+                print('[WARNING] Incoming pakcet timeout occured.')
 
     # conditions for breaking the communication
     except serial.serialutil.SerialException:
@@ -101,16 +134,14 @@ def verifyIV(block: bytes, netkey: bytes) -> dict:
     out = dict()
     out['VALID'] = 'VALID'
 
-    if (len(block) != 16):
+    if (len(block) < 9):
         out['VALID'] = 'INCOMPLETE'
         return out
-    elif (block[2:6] == netkey):
+    elif (block[1:5] == netkey):
         if (block[0] in pkt_type_dict):
             out['TYPE'] = pkt_type_dict[block[0]]
             if (out['TYPE'] == 'MSG'):
-                out['LENGTH'] = block[1]
-            elif (block[1] > 0):
-                out['VALID'] = 'INVALID'
+                out['LEN'] = block[9]
         else:
             out['VALID'] = 'INVALID'
     else:
@@ -118,28 +149,6 @@ def verifyIV(block: bytes, netkey: bytes) -> dict:
         return out
     
     return out
-
-
-    if (len(block) != 16):
-        out['VALID'] = 'INVALID'
-        return out
     
-    pkt_type = block[0]
-    if (pkt_type in pkt_type_dict):
-        out['TYPE'] = pkt_type_dict[pkt_type]
-    else:
-        out['VALID'] = 'INVALID'
-        return out
-
-    if (block[2:6] != netkey):
-        out['VALID'] = 'FOREIGN'
-        return out
-    
-    if (out['TYPE'] == 'MSG'):
-        out['LENGTH'] = block[1]
-    elif (block[1] != 0):
-        out['VALID'] == 'CORRUPT'
-    
-    return out
-
-    
+def parsepayload(payload: bytes, iv: bytes, key: bytes) -> bytes:
+    return payload
