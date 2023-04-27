@@ -8,3 +8,5 @@ prototyping/*
 
 testing/python-serial/data.bin
 testing/python-serial/data.bin
+
+*.odt
