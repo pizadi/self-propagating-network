@@ -6,7 +6,6 @@
 
 #define TIMEOUT 50
 
-LiquidCrystal_I2C lcd(0x27, 20, 4);
 char lcdBuffer[81];
 uint8_t pointer = 0;
 
@@ -15,8 +14,14 @@ byte networkId[4] = {0x01, 0x02, 0x03, 0x04};
 byte deviceId[4] = {0x01, 0x02, 0x03, 0x04};
 byte aeskey[16] = {0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04};
 byte dataBuffer[256];
+byte encBuffer[256];
+byte ivBuffer[16];
+size_t ivOffset;
 uint16_t ptr = 0;
 uint64_t serial0timer = 0;
+
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+mbedtls_aes_context aesctx;
 
 void print_fix(char * str);
 void sendpacket(byte * buf, uint32_t len);
@@ -24,20 +29,19 @@ void sendpacket(byte * buf, uint32_t len);
 void setup() {
   Serial.begin(115200);
   Serial2.begin(115200);
+  int a = 0;
+  // AES context initialization
+  mbedtls_aes_init(&aesctx);
+  a += mbedtls_aes_setkey_enc(&aesctx, (const unsigned char *) aeskey, 128);
   lcd.init();
   lcd.backlight();
   lcd.clear();
-  int a, b;
-  uint64_t t = esp_timer_get_time();
+  if (a == 0) lcd.printstr("AES INIT");
+  else lcd.printstr("AES FAILED");
   for (int i = 0; i < 9; i++) {
     while (Serial2.availableForWrite() < 1);
     Serial2.write(messageBuffer[i]);
   }
-  delay(1);
-  t = esp_timer_get_time() - t;
-  double r = 9 * 1000000 / t;
-  sprintf(lcdBuffer, "%.3lf Bps", r);
-  lcd.printstr(lcdBuffer); 
 }
 
 void loop() {
@@ -82,7 +86,9 @@ void loop() {
     messageBuffer[9] = len % 256;
     esp_fill_random(&messageBuffer[10], 6);
     sendpacket(messageBuffer, 16);
-    sendpacket(dataBuffer, len);
+    for (int i = 0; i < 16; i++) ivBuffer[i] = messageBuffer[i];
+    mbedtls_aes_crypt_cfb128(&aesctx, MBEDTLS_AES_ENCRYPT, len, &ivOffset, ivBuffer, dataBuffer, encBuffer);
+    sendpacket(encBuffer, len);
     ptr = 0;
   }
 

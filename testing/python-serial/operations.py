@@ -1,8 +1,8 @@
 import serial
 import time
-from serial.tools.list_ports import comports
 import binascii
-
+from serial.tools.list_ports import comports
+from Crypto.Cipher import AES
 
 pkt_type_dict = {
     0 : "NONE",
@@ -14,7 +14,7 @@ pkt_type_dict = {
 
 timeout = 500
 netkey = b'\x01\x02\x03\x04'
-aeskey = b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+aeskey = b'\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04'
 
 def listen(outputfile: str) -> None:
     # listing the available COM ports
@@ -93,8 +93,10 @@ def listen(outputfile: str) -> None:
                 
                 if (state['TYPE'] == 'PAYLOAD' and state['LEN'] == 0):
                     parsed = parsepayload(payloadbuffer, packetbuffer, aeskey)
+                    # print(''.join(f'{c:02X}' for c in payloadbuffer)) # prints the raw data
                     if (parsed):
                         print(f'[INFO] Received {parsed["LEN"]} bytes of payload.')
+                        print(f'[INFO] Content: {parsed["DATA"]}')
                     else:
                         print(f'[WARNING] Corrupted payload.')
                     payloadbuffer = b''
@@ -157,10 +159,13 @@ def verifyIV(block: bytes, netkey: bytes) -> dict:
     
 def parsepayload(payload: bytes, iv: bytes, key: bytes) -> bytes:
     parsed = dict()
-    len = int(payload[-5])
+    
+    cipher = AES.new(aeskey, AES.MODE_CFB, iv=iv, segment_size=128)
+    deciphered = cipher.decrypt(payload)
+    len = int(deciphered[-5])
     parsed['LEN'] = len
-    parsed['DATA'] = payload[:len]
-    parsed['CRC'] = int.from_bytes(payload[-4:], 'big')
+    parsed['DATA'] = deciphered[:len]
+    parsed['CRC'] = int.from_bytes(deciphered[-4:], 'big')
     if (parsed['CRC'] != (binascii.crc32(parsed['DATA']) & 0XFFFFFFFF)):
         return None
     return parsed
