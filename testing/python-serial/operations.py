@@ -1,6 +1,8 @@
 import serial
 import time
 from serial.tools.list_ports import comports
+import binascii
+
 
 pkt_type_dict = {
     0 : "NONE",
@@ -90,8 +92,11 @@ def listen(outputfile: str) -> None:
                     state['LEN'] -= 1
                 
                 if (state['TYPE'] == 'PAYLOAD' and state['LEN'] == 0):
-                    payload = parsepayload(payloadbuffer, packetbuffer, aeskey)
-                    print(f'[INFO] Received {payload}')
+                    parsed = parsepayload(payloadbuffer, packetbuffer, aeskey)
+                    if (parsed):
+                        print(f'[INFO] Received {parsed["LEN"]} bytes of payload.')
+                    else:
+                        print(f'[WARNING] Corrupted payload.')
                     payloadbuffer = b''
                     state['TYPE'] = 'NONE'
                     state['LEN'] = 0
@@ -120,7 +125,7 @@ def listen(outputfile: str) -> None:
             if (state['TYPE'] != 'NONE' and time.time() - lst_time > 1.):
                 state['TYPE'] = 'NONE'
                 state['LEN'] = 0
-                print('[WARNING] Incoming pakcet timeout occured.')
+                print('[WARNING] Incoming packet timeout occured.')
 
     # conditions for breaking the communication
     except serial.serialutil.SerialException:
@@ -151,4 +156,11 @@ def verifyIV(block: bytes, netkey: bytes) -> dict:
     return out
     
 def parsepayload(payload: bytes, iv: bytes, key: bytes) -> bytes:
-    return payload
+    parsed = dict()
+    len = int(payload[-5])
+    parsed['LEN'] = len
+    parsed['DATA'] = payload[:len]
+    parsed['CRC'] = int.from_bytes(payload[-4:], 'big')
+    if (parsed['CRC'] != (binascii.crc32(parsed['DATA']) & 0XFFFFFFFF)):
+        return None
+    return parsed

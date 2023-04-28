@@ -1,6 +1,10 @@
 #include <LiquidCrystal_I2C.h>
 #include <mbedtls/aes.h>
 #include <esp_random.h>
+#include <esp32/rom/crc.h>
+
+
+#define TIMEOUT 50
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 char lcdBuffer[81];
@@ -12,6 +16,7 @@ byte deviceId[4] = {0x01, 0x02, 0x03, 0x04};
 byte aeskey[16] = {0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04};
 byte dataBuffer[256];
 uint16_t ptr = 0;
+uint64_t serial0timer = 0;
 
 void print_fix(char * str);
 void sendpacket(byte * buf, uint32_t len);
@@ -37,13 +42,34 @@ void setup() {
 
 void loop() {
   // TODO: Rewrite as an interrupt with proper timeout
-  while(Serial.available()) {
+  while(Serial.available() && ptr < 235) {
     char tmp = Serial.read();
     dataBuffer[ptr] = tmp;
     ptr++;
+    serial0timer = millis();
   }
-  if (Serial.available() == 0 && ptr > 0){
-    uint16_t len = ptr / 16 * 16 + 16 * (ptr % 16 > 0);
+//  Serial.println(millis() - serial0timer);
+  if ((millis() - serial0timer > TIMEOUT) && (Serial.available() == 0) && (ptr > 0)){
+    uint16_t len;
+    if (ptr % 16 < 11) {
+      len = ptr / 16 * 16 + 16;
+    }
+    else {
+      len = ptr / 16 * 16 + 32;
+    }
+    for (int i = 0; i < ptr; i++) {
+      Serial.print((char) dataBuffer[i]);
+    }
+    Serial.println("");
+    uint32_t romCRC = (~crc32_le((uint32_t)~(0xffffffff), (const uint8_t*)dataBuffer, ptr))^0xffffffff;
+    for (int i = ptr; i < len-5; i++) dataBuffer[i] = 0;
+    dataBuffer[len-5] = ptr % 256;
+    dataBuffer[len-4] = (romCRC >> 24) & 0xff;
+    dataBuffer[len-3] = (romCRC >> 16) & 0xff;
+    dataBuffer[len-2] = (romCRC >> 8) & 0xff;
+    dataBuffer[len-1] = romCRC & 0xff;
+
+    
     messageBuffer[0] = 1;
     messageBuffer[1] = networkId[0];
     messageBuffer[2] = networkId[1];
@@ -53,15 +79,10 @@ void loop() {
     messageBuffer[6] = deviceId[1];
     messageBuffer[7] = deviceId[2];
     messageBuffer[8] = deviceId[3];    
-    messageBuffer[9] = len;
+    messageBuffer[9] = len % 256;
     esp_fill_random(&messageBuffer[10], 6);
     sendpacket(messageBuffer, 16);
-    uint32_t wptr = 0;
-    while (wptr < ptr) {
-      for (int i = 0; i < 16; i++) messageBuffer[i] = dataBuffer[wptr+i];
-      sendpacket(messageBuffer, 16);
-      wptr += 16;
-    }
+    sendpacket(dataBuffer, len);
     ptr = 0;
   }
 
