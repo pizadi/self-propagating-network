@@ -5,11 +5,13 @@ from serial.tools.list_ports import comports
 from Crypto.Cipher import AES
 
 pkt_type_dict = {
-    0 : "NONE",
-    1 : "MSG",
-    2 : "CHECK",
-    3 : "ACK",
-    4 : "NACK"
+    0 : 'NONE',
+    1 : 'MSG',
+    2 : 'CHECK',
+    3 : 'ACK',
+    4 : 'NACK',
+    5 : 'CMD',
+    6 : 'ADP'
 }
 
 timeout = 500
@@ -40,7 +42,7 @@ def listen(outputfile: str) -> None:
         baud_rate = int(input(f'Choose a baud rate for serial communication: '))
         # checking for the validity of the baud rate
         if (not baud_rate in {2400, 9600, 115200}):
-            print('Invalid port.')
+            print('Invalid baud rate.')
             continue
         break
     
@@ -72,17 +74,24 @@ def listen(outputfile: str) -> None:
                 f.close()
 
             if (len(databuffer) > 0):
+            # processing data
                 if (state['TYPE'] == 'NONE'):
                     if (databuffer[0] in pkt_type_dict):
                         state['TYPE'] = pkt_type_dict[databuffer[0]]
+                        # setting the remaining number of bytes
                         if (state['TYPE'] == 'CHECK'):
                             state['LEN'] = 8
                         elif (state['TYPE'] == 'MSG'):
                             state['LEN'] = 15
                         elif (state['TYPE'] == 'ACK'):
-                            state['LEN'] = 15
+                            state['LEN'] = 13
                         elif (state['TYPE'] == 'NACK'):
+                            state['LEN'] = 8
+                        elif (state['TYPE'] == 'CMD'):
                             state['LEN'] = 15
+                        elif (state['TYPE'] == 'ADP'):
+                            state['LEN'] = 12
+                        
                     packetbuffer = b'' + databuffer[:1]
                 elif (state['TYPE'] == 'PAYLOAD'):
                     payloadbuffer += databuffer[:1]
@@ -92,6 +101,7 @@ def listen(outputfile: str) -> None:
                     state['LEN'] -= 1
                 
                 if (state['TYPE'] == 'PAYLOAD' and state['LEN'] == 0):
+                # parsing a completely transferred payload
                     parsed = parsepayload(payloadbuffer, packetbuffer, aeskey)
                     # print(''.join(f'{c:02X}' for c in payloadbuffer)) # prints the raw data
                     if (parsed):
@@ -104,20 +114,33 @@ def listen(outputfile: str) -> None:
                     state['LEN'] = 0
 
                 elif (state['TYPE'] != 'NONE' and state['LEN'] == 0):
-                    res = verifyIV(packetbuffer, netkey)
+                # parsing a non-payload packet
+                    res = verifyheader(packetbuffer, netkey)
                     if (res['VALID'] == 'VALID'):
                         print(f'[INFO] Valid {res["TYPE"]} package received.')
+
                         if (res['TYPE'] == 'MSG'):
                             state['TYPE'] = 'PAYLOAD'
+
                             state['LEN'] = res['LEN']
                             print(f'[INFO] Receiving {res["LEN"]} bytes.')
+
                         elif (res['TYPE'] == 'CHECK'):
                             state['TYPE'] = 'NONE'
                             state['LEN'] = 0
+
                         elif (res['TYPE'] == 'ACK'):
                             pass
+
                         elif (res['TYPE'] == 'NACK'):
                             pass
+                        
+                        elif (res['TYPE'] == 'CMD'):
+                            pass
+
+                        elif (res['TYPE'] == 'ADP'):
+                            pass
+
                     else:
                         print('[WARNING] Invalid data discarded.')
                         state['TYPE'] = 'NONE'
@@ -137,7 +160,8 @@ def listen(outputfile: str) -> None:
         print(f'Interrupt signal received. Quitting...')
         return
 
-def verifyIV(block: bytes, netkey: bytes) -> dict:
+def verifyheader(block: bytes, netkey: bytes) -> dict:
+    # verifies packet header
     out = dict()
     out['VALID'] = 'VALID'
 
@@ -158,6 +182,7 @@ def verifyIV(block: bytes, netkey: bytes) -> dict:
     return out
     
 def parsepayload(payload: bytes, iv: bytes, key: bytes) -> bytes:
+    # decrypts and verifies a payload package
     parsed = dict()
     
     cipher = AES.new(aeskey, AES.MODE_CFB, iv=iv, segment_size=128)
