@@ -46,14 +46,18 @@ void setup() {
 
 void loop() {
   // TODO: Rewrite as an interrupt with proper timeout
-  while(Serial.available() && ptr < 235) {
+  while(Serial.available()) {
+    if (ptr > 233) {
+      Serial.println("Serial input overflow occured.");
+      break;
+    }
     char tmp = Serial.read();
     dataBuffer[ptr] = tmp;
     ptr++;
     serial0timer = millis();
   }
 //  Serial.println(millis() - serial0timer);
-  if ((millis() - serial0timer > TIMEOUT) && (Serial.available() == 0) && (ptr > 0)){
+  if ((millis() - serial0timer > TIMEOUT) && (ptr > 0)){
     uint16_t len;
     if (ptr % 16 < 11) {
       len = ptr / 16 * 16 + 16;
@@ -65,6 +69,8 @@ void loop() {
       Serial.print((char) dataBuffer[i]);
     }
     Serial.println("");
+    sprintf(lcdBuffer, "LEN: %u PTR: %u", len, ptr);
+    Serial.println(lcdBuffer);
     uint32_t romCRC = (~crc32_le((uint32_t)~(0xffffffff), (const uint8_t*)dataBuffer, ptr))^0xffffffff;
     for (int i = ptr; i < len-5; i++) dataBuffer[i] = 0;
     dataBuffer[len-5] = ptr % 256;
