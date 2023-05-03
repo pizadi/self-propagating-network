@@ -14,9 +14,12 @@ pkt_type_dict = {
     6 : 'ADP'
 }
 
-timeout = 500
+timeout = .1
 netkey = b'\x01\x02\x03\x04'
 aeskey = b'\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04'
+deviceid = 1
+
+children = dict()
 
 def listen(outputfile: str) -> None:
     # listing the available COM ports
@@ -117,17 +120,26 @@ def listen(outputfile: str) -> None:
                 # parsing a non-payload packet
                     res = verifyheader(packetbuffer, netkey)
                     if (res['VALID'] == 'VALID'):
-                        print(f'[INFO] Valid {res["TYPE"]} package received.')
+                        print(f'[INFO] Valid {res["TYPE"]} package received from {res["DEVICE"]:08X}.')
 
-                        if (res['TYPE'] == 'MSG'):
+                        if (res['TYPE'] == 'MSG' and res['DEVICE'] in children):
                             state['TYPE'] = 'PAYLOAD'
-
                             state['LEN'] = res['LEN']
                             print(f'[INFO] Receiving {res["LEN"]} bytes.')
 
                         elif (res['TYPE'] == 'CHECK'):
                             state['TYPE'] = 'NONE'
                             state['LEN'] = 0
+                            if (res['DEVICE'] == 0):
+                                new_id = newdeviceid()
+                                if (new_id):
+                                    info = dict()
+                                    info['TYPE'] = 'ADP'
+                                    info['NETWORK'] = netkey
+                                    info['DEVICE'] = deviceid
+                                    info['ADPDEVICE'] = new_id
+                                    sendpacket(info)
+                                    children[new_id] = 0
 
                         elif (res['TYPE'] == 'ACK'):
                             pass
@@ -169,12 +181,16 @@ def verifyheader(block: bytes, netkey: bytes) -> dict:
         out['VALID'] = 'INCOMPLETE'
         return out
     elif (block[1:5] == netkey):
+        out['DEVICE'] = int.from_bytes(block[5:9], 'big')
         if (block[0] in pkt_type_dict):
             out['TYPE'] = pkt_type_dict[block[0]]
             if (out['TYPE'] == 'MSG'):
                 out['LEN'] = block[9]
+            elif (out['TYPE'] == 'CHECK'):
+                pass
         else:
             out['VALID'] = 'INVALID'
+        
     else:
         out['VALID'] = 'INVALID'
         return out
@@ -187,10 +203,21 @@ def parsepayload(payload: bytes, iv: bytes, key: bytes) -> bytes:
     
     cipher = AES.new(aeskey, AES.MODE_CFB, iv=iv, segment_size=128)
     deciphered = cipher.decrypt(payload)
-    len = int(deciphered[-5])
+    len = int(deciphered[-9])
+    parsed['TIME'] = int.from_bytes(deciphered[-8:-4], 'big')
     parsed['LEN'] = len
     parsed['DATA'] = deciphered[:len]
     parsed['CRC'] = int.from_bytes(deciphered[-4:], 'big')
-    if (parsed['CRC'] != (binascii.crc32(parsed['DATA']) & 0XFFFFFFFF)):
+    crc = (binascii.crc32(parsed['DATA']) & 0XFFFFFFFF)
+    if (parsed['CRC'] != crc):
+        print(f'[WARNING] CRC-32 mismatch: 0X{parsed["CRC"]:08X} vs 0X{crc:08X}')
         return None
     return parsed
+
+def newdeviceid():
+    # returns a new device id
+    return 2
+
+def sendpacket(info: dict) -> None:
+    # broadcasts a packet
+    pass

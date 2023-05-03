@@ -11,7 +11,7 @@ uint8_t pointer = 0;
 
 byte messageBuffer[16]  {0x02, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, };
 byte networkId[4] = {0x01, 0x02, 0x03, 0x04};
-byte deviceId[4] = {0x01, 0x02, 0x03, 0x04};
+byte deviceId[4] = {0x00, 0x00, 0x00, 0x00};
 byte aeskey[16] = {0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04};
 byte dataBuffer[256];
 byte encBuffer[256];
@@ -19,7 +19,7 @@ byte ivBuffer[16];
 size_t ivOffset;
 uint16_t ptr = 0;
 uint64_t serial0timer = 0;
-
+uint32_t timebuffer = 0;
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 mbedtls_aes_context aesctx;
 
@@ -47,7 +47,7 @@ void setup() {
 void loop() {
   // TODO: Rewrite as an interrupt with proper timeout
   while(Serial.available()) {
-    if (ptr > 233) {
+    if (ptr >= 231) {
       Serial.println("Serial input overflow occured.");
       break;
     }
@@ -72,8 +72,12 @@ void loop() {
     sprintf(lcdBuffer, "LEN: %u PTR: %u", len, ptr);
     Serial.println(lcdBuffer);
     uint32_t romCRC = (~crc32_le((uint32_t)~(0xffffffff), (const uint8_t*)dataBuffer, ptr))^0xffffffff;
-    for (int i = ptr; i < len-5; i++) dataBuffer[i] = 0;
-    dataBuffer[len-5] = ptr % 256;
+    for (int i = ptr; i < len-9; i++) dataBuffer[i] = 0;
+    dataBuffer[len-9] = ptr % 256;
+    dataBuffer[len-8] = (timebuffer >> 24) & 0xff;
+    dataBuffer[len-7] = (timebuffer >> 16) & 0xff;
+    dataBuffer[len-6] = (timebuffer >> 8) & 0xff;
+    dataBuffer[len-5] = timebuffer & 0xff;
     dataBuffer[len-4] = (romCRC >> 24) & 0xff;
     dataBuffer[len-3] = (romCRC >> 16) & 0xff;
     dataBuffer[len-2] = (romCRC >> 8) & 0xff;
