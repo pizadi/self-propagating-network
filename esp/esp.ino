@@ -14,12 +14,15 @@ byte payloadBuffer[240];
 byte encBuffer[240];
 byte ivBuffer[16];
 
-mbedtls_aes_context ctx;
+char * password = "espressif";
+
+mbedtls_aes_context aesctx;
 
 int STATE;
 
 void setup() {
   Serial.begin(115200);
+  Serial.onReceive(func_config, true);
   STATE = 0;
 }
 
@@ -34,4 +37,9 @@ void loop() {
       break;
     }
   }
+}
+
+void onSerialRx() {
+  while (Serial.available()) Serial.read();
+  Serial.println("INTERRUPTED!");
 }
