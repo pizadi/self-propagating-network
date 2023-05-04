@@ -5,6 +5,8 @@ import os
 import argparse
 import serial
 from serial.tools.list_ports import comports
+import secrets
+import getpass
 
 def main():
     parser = argparse.ArgumentParser(description='A helper program to configure SPRN ESP32 modules')
@@ -14,36 +16,61 @@ def main():
     parser.add_argument('-f', '--file', type=str, help='file to save the config')
     # parser.add_argument('-p', '--port', type=str, help='target COM port to be used')
     parser.add_argument('-k', '--key', type=str, help='128-bit AES key in HEX format')
-    parser.add_argument('-i', '--id', type=str, help='network id')
+    parser.add_argument('-i', '--id', type=str, help='network id in hex format')
+    # parser.add_argument('-b', '--baud-rate', type=str, help='baud rate')
     # parser.add_argument('-s', '--server', type=str, help='server address and port')
     args = parser.parse_args()
 
     # ARGUEMENT CHECKS AND ASSIGNMENTS
-    # TODO
-    
-
     conf_packet = b''
 
-    if (not args.generate and os.path.exists(args.file)):
-        # TODO
-        # ASSIGN PARAMETERS
-        pass
-    else:
-        raise ValueError(f'Invalid file path')
+    # GETS THE AES KEY
+    if (args.generate and args.key is None):
+        conf_packet += bytes.fromhex(secrets.token_hex(16))
+    elif (args.generate):
+        try:
+            if (len(args.key) > 32):
+                raise ValueError
+            else:
+                conf_packet += bytes.fromhex(args.key)
+        except ValueError:
+            print(f'Invalid AES key.')
+            return
     
-    if (args.generate):
-        # GENERATE AN AES KEY, AND A NETWORK ID IF THEY ARE UNSPECIFIED
-        # TODO
-        pass
+    # GETS THE NET ID
+    if (args.generate and args.id is None):
+        conf_packet += bytes.fromhex(secrets.token_hex(4))
+    elif (args.generate):
+        try:
+            if (len(args.id) > 8):
+                raise ValueError
+            else:
+                conf_packet += bytes.fromhex(args.id)
+        except ValueError:
+            print(f'Invalid network ID.')
+            return
 
-        # CREATE THE CONFIG PACKET
-        # TODO
-        
-        # WRTIES THE CONFIGURATION TO THE SPECIFIED FILE
-        if (args.file):
-            fptr = open(args.file, 'wb')
-            fptr.write(conf_packet)
+    if (not args.generate):
+        if (os.path.exists(args.file)):
+            # READS THE CONFIG FILE
+
+            fptr = open(args.file, 'rb')
+            cont = fptr.read()
+            if (len(cont) != 20):
+                print(f'invalid config file')
+            else:
+                conf_packet = cont
             fptr.close()
+        else:
+            print(f'Invalid file path')
+            return
+
+    if (args.generate and args.file is not None):
+        # WRTIES THE CONFIGURATION TO THE SPECIFIED FILE
+        
+        fptr = open(args.file, 'wb')
+        fptr.write(conf_packet)
+        fptr.close()
 
 
     if (args.configure):
@@ -66,14 +93,14 @@ def main():
         ser = serial.Serial(ports[p_choice-1].device, 115200, timeout=1)
 
         # GET DEVICE PASSWORD FROM USER
-        passwd = input(f'Enter the module\'s password: ')
+        passwd = getpass.getpass(f'Enter the module\'s password: ')
         packet = bytes(passwd, 'ASCII') + b'\0' +conf_packet
 
         # SEND CONFIG PACKET TO DEVICE AND PRINT THE RESPONSE
         ser.write(packet)
         ser.flush()
         
-        resp = ser.read(10)
+        resp = ser.read(10).decode('ASCII')
 
         if (resp == 'DONE'):
             print('Device successfully configured.')
@@ -82,7 +109,7 @@ def main():
         elif (resp == 'BADPK'):
             print('Packet Corrupted.')
         else:
-            print(f'Unknown error: {resp}')
+            print(f'Unknown error: {(resp)}')
 
 if __name__ == '__main__':
     main()
