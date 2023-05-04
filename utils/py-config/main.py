@@ -12,14 +12,15 @@ def main():
     parser.add_argument('-G', '--generate', action='store_true', help='generates a config file')
     parser.add_argument('-C', '--configure', action='store_true', help='configures a board using a config file')
     parser.add_argument('-f', '--file', type=str, help='file to save the config')
-    parser.add_argument('-p', '--port', type=str, help='target COM port to be used')
+    # parser.add_argument('-p', '--port', type=str, help='target COM port to be used')
     parser.add_argument('-k', '--key', type=str, help='128-bit AES key in HEX format')
     parser.add_argument('-i', '--id', type=str, help='network id')
-    parser.add_argument('-s', '--server', type=str, help='server address and port')
+    # parser.add_argument('-s', '--server', type=str, help='server address and port')
     args = parser.parse_args()
 
     # ARGUEMENT CHECKS AND ASSIGNMENTS
     # TODO
+    
 
     conf_packet = b''
 

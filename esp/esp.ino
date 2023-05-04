@@ -1,7 +1,7 @@
 #include <mbedtls/aes.h>
 #include <esp_random.h>
 #include <esp32/rom/crc.h>
-#include "states.ino"
+#include "states.h"
 
 #define TIMEOUT
 #define MAX_TIMEOUTS
