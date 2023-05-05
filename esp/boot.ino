@@ -1,31 +1,22 @@
-#include "states.h"
 #include <EEPROM.h>
 
-#define EEPROM_SIZE 21
+#include "states.h"
+#include "globals.h"
 
-extern byte networkID[4];
-extern byte AESKey[16];
 
 int func_boot() {
-  if (EEPROM.begin(EEPROM_SIZE) == 0) {
-    Serial.println("Fatal Error: Failed to initiate EEPROM.");
-    return STATE_SLEEP;
-  }
-  if (EEPROM.readByte(0) == 0x67) {
-    if (EEPROM.readBytes(1, AESKey, 16) == 16 && EEPROM.readBytes(17, networkID, 4) == 4) {
-      Serial.println();
+  preferences.begin("config", true);
+  if (preferences.isKey("KEY") && preferences.isKey("ID")) {
+    if (preferences.getBytes("KEY", AESKey, 16) == 16 && preferences.getBytes("ID", networkID, 4) == 4) {
+      Serial.println("Info: Configuration loaded successfully.");
     }
     else {
-      Serial.println("Fatal Error: Device EEPROM corrupted.");
-      return STATE_SLEEP;
+      Serial.println("Error: Configuratoin corrupted.");
     }
   }
-  else
-  {
-    
+  else {
     Serial.println("Error: No configuratoin found.");
     return STATE_SLEEP;
   }
-  EEPROM.end();
-  return STATE_BOOT;
+  return STATE_SLEEP;
 }

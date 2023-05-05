@@ -100,13 +100,13 @@ def main():
         ser.write(packet)
         ser.flush()
         
-        resp = ser.read(10).decode('ASCII')
+        resp = ser.read(4).decode('ASCII')
 
         if (resp == 'DONE'):
             print('Device successfully configured.')
-        elif (resp == 'PWERR'):
+        elif (resp == 'WRPW'):
             print('Wrong password.')
-        elif (resp == 'BADPK'):
+        elif (resp == 'WRPK'):
             print('Packet Corrupted.')
         else:
             print(f'Unknown error: {(resp)}')

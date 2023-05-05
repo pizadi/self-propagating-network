@@ -1,10 +1,42 @@
+#include <Preferences.h>
+#include <string.h>
+
 #include "states.h"
-#include <EEPROM.h>
+#include "globals.h"
 
-#define EEPROM_SIZE 21
 
-extern char * password;
 
-int func_config() {
-  
+void func_config() {
+  char passBuffer[236];
+  uint8_t i = 0;
+  while (Serial.available() && i < 256) {
+    passBuffer[i] = Serial.read();
+    if (passBuffer[i] == '\0') break;
+    i++;
+  }
+  if (strcmp(password, passBuffer) == 0) {
+    if (Serial.available() != 20) {
+      while (Serial.available()) Serial.read();
+      Serial.print("WRPK");
+      Serial.flush();
+      Serial.end();
+      return;
+    }
+    
+    for (int i = 0; i < 16; i++) AESKey[i] = Serial.read();
+    for (int i = 0; i < 4; i++) networkID[i] = Serial.read();
+    
+    preferences.begin("config", false);
+    preferences.clear();
+    preferences.putBytes("KEY", (void *) AESKey, 16);
+    preferences.putBytes("ID", (void *) networkID, 4);
+    preferences.end();
+    Serial.print("DONE");
+    Serial.flush();
+    ESP.restart();
+  }
+  else {
+    Serial.print("WRPW");
+    Serial.flush();
+  }
 }
