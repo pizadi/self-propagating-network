@@ -1,4 +1,4 @@
-#include <EEPROM.h>
+#include <Preferences.h>
 
 #include "states.h"
 #include "globals.h"
@@ -12,11 +12,12 @@ int func_boot() {
     }
     else {
       Serial.println("Error: Configuratoin corrupted.");
+      return STATE_SLEEP;
     }
   }
   else {
     Serial.println("Error: No configuratoin found.");
     return STATE_SLEEP;
   }
-  return STATE_SLEEP;
+  return STATE_SEARCH;
 }

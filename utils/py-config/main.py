@@ -89,8 +89,14 @@ def main():
                 print('Invalid port.')
                 continue
             break
-        
-        ser = serial.Serial(ports[p_choice-1].device, 115200, timeout=1)
+        try:
+            ser = serial.Serial(ports[p_choice-1].device, 115200, timeout=1)
+        except ValueError:
+            print(f'Invalid COM port {ports[p_choice-1]}, could not connect.')
+            return
+        except serial.serialutil.SerialException:
+            print(f'Could not connect. Port {ports[p_choice-1]} might be busy or unavailable.')
+            return
 
         # GET DEVICE PASSWORD FROM USER
         passwd = getpass.getpass(f'Enter the module\'s password: ')
