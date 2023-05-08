@@ -10,7 +10,8 @@
 #define MAX_TIMEOUTS 5
 #define MAX_WAIT 800
 #define MIN_WAIT 200
-#define MAX_FIFO 24
+#define MAX_BC_FIFO 24
+#define MAX_RX_FIFO 512
 
 #define TIMER_PRESCALER 80
 #define TIMER_MULTIPLIER 1000
@@ -59,6 +60,7 @@ extern Preferences preferences;
 void schedule_broadcast(byte * packet, uint8_t len);
 void setBroadcastTimer();
 void broadcastPacket();
+void parseHeader(byte * out, uint8_t flags);
 
 // INTERRUPTS
 

@@ -27,7 +27,7 @@ byte deviceID[4];
 byte AESKey[16];
 
 byte inputFIFO[512]; // Radio Input FIFO
-packet broadcastFIFO[MAX_FIFO]; // The global broadcast FIFO
+packet broadcastFIFO[MAX_BC_FIFO]; // The global broadcast FIFO
 
 byte payloadBuffer[240];
 byte encBuffer[240];
@@ -43,10 +43,10 @@ Preferences preferences;
 // FUNCTIONS
 
 void schedule_broadcast(byte * packet, uint8_t len) {
-  int t = (broadcastFIFO_head + broadcastFIFO_len) % MAX_FIFO;
-  if (broadcastFIFO_len >= MAX_FIFO) {
+  int t = (broadcastFIFO_head + broadcastFIFO_len) % MAX_BC_FIFO;
+  if (broadcastFIFO_len >= MAX_BC_FIFO) {
     delete[] broadcastFIFO[broadcastFIFO_head].message;
-    broadcastFIFO_head = (broadcastFIFO_head + 1) % MAX_FIFO;
+    broadcastFIFO_head = (broadcastFIFO_head + 1) % MAX_BC_FIFO;
   }
   else {
     broadcastFIFO_len++;
@@ -79,10 +79,15 @@ void broadcastPacket() {
   Serial2.flush();
   Serial.println("Packet sent.");
   delete[] packet;
-  broadcastFIFO_head = (broadcastFIFO_head + 1) % MAX_FIFO;
+  broadcastFIFO_head = (broadcastFIFO_head + 1) % MAX_BC_FIFO;
   broadcastFIFO_len -= 1;
   broadcastTimerIsSet = false;
   if (broadcastFIFO_len > 0) setBroadcastTimer();
+}
+
+void parseHeader(byte * out, uint8_t flags) {
+  // TODO
+  // Parses the input and searches for a header of the type flag
 }
 
 // INTERRUPTS
@@ -102,5 +107,15 @@ void IRAM_ATTR broadcastTimerInterrupt() {
 }
 
 void IRAM_ATTR packetReceive() {
-  while (Serial2.available()) Serial2.read();
+  while (Serial2.available()) {
+    byte tmp = Serial2.read();
+    if (inputFIFO_len >= MAX_RX_FIFO) {
+      inputFIFO_head = (inputFIFO_head + 1) % MAX_RX_FIFO;
+    }
+    else {
+      inputFIFO_len++;
+    }
+    int t = (inputFIFO_head + inputFIFO_len) % MAX_RX_FIFO;
+    inputFIFO[t] = tmp;
+  }
 }
