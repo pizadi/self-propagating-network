@@ -12,3 +12,6 @@ testing/python-serial/data.bin
 *.odt
 
 server/build/*
+
+utils/py-config/*.conf
+utils/py-listener/*.bin
