@@ -2,9 +2,9 @@
 #include <Preferences.h>
 #include <esp_random.h>
 
-// LOCAL INCLUDES
-
 #include "globals.h"
+#include "headers.h"
+#include "utils.h"
 
 // VARIABLES
 
@@ -85,9 +85,109 @@ void broadcastPacket() {
   if (broadcastFIFO_len > 0) setBroadcastTimer();
 }
 
-void parseHeader(byte * out, uint8_t flags) {
+byte * parseHeader(uint8_t flags=0xFF) {
   // TODO
   // Parses the input and searches for a header of the type flag
+  for (int i = 0; i < 16; i++) out[i] = 0;
+  while (inputFIFO_len > 0) {
+    if (inputFIFO[inputFIFO_head] & flags == 0) {
+      inputFIFO_head = (inputFIFO_head + 1) % MAX_INPUT_FIFO;
+      inputFIFO_len--;
+      continue;
+    }
+    switch (inputFIFO[inputFIFO_head]) {
+      case HEADER_MSG:
+      if (inputFIFO_len < 16) return NULL;
+      for (int i = 0; i < 4; i++) {
+        if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+      }
+      if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+      uint16_t msglen = inputFIFO[(inputFIFO_head + 9) % MAX_INPUT_FIFO] + 16;
+      if (inputFIFO_len < msglen) return NULL;
+      byte * out = new byte[msglen];
+      for (int i = 0; i < msglen; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+      inputFIFO_len -= msglen;
+      inputFIFO_head = (inputFIFO_head + msglen) % MAX_INPUT_FIFO;
+      return out;      
+      break;
+      
+      case HEADER_CHECK:
+      if (inputFIFO_len < 9) return NULL;
+      for (int i = 0; i < 4; i++) {
+        if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+      }
+      if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+      byte * out = new byte[9];
+      for (int i = 0; i < 9; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+      inputFIFO_len -= 9;
+      inputFIFO_head = (inputFIFO_head + 9) % MAX_INPUT_FIFO;
+      return out;      
+      break;
+      
+      case HEADER_ACK:
+      if (inputFIFO_len < 14) return NULL;
+      for (int i = 0; i < 4; i++) {
+        if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+      }
+      if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+      byte * out = new byte[14];
+      for (int i = 0; i < 14; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+      inputFIFO_len -= 14;
+      inputFIFO_head = (inputFIFO_head + 14) % MAX_INPUT_FIFO;
+      return out;  
+      break;
+      
+      case HEADER_NACK:
+      if (inputFIFO_len < 9) return NULL;
+      for (int i = 0; i < 4; i++) {
+        if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+      }
+      if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+      byte * out = new byte[9];
+      for (int i = 0; i < 9; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+      inputFIFO_len -= 9;
+      inputFIFO_head = (inputFIFO_head + 9) % MAX_INPUT_FIFO;
+      return out;  
+      break;
+      
+      case HEADER_CMD:
+      if (inputFIFO_len < 16) return NULL;
+      for (int i = 0; i < 4; i++) {
+        if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+      }
+      if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+      uint16_t msglen = inputFIFO[(inputFIFO_head + 9) % MAX_INPUT_FIFO] + 16;
+      if (inputFIFO_len < msglen) return NULL;
+      byte * out = new byte[msglen];
+      for (int i = 0; i < msglen; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+      inputFIFO_len -= msglen;
+      inputFIFO_head = (inputFIFO_head + msglen) % MAX_INPUT_FIFO;
+      return out;
+      break;
+      
+      case HEADER_ADP:
+      if (inputFIFO_len < 9) return NULL;
+      for (int i = 0; i < 4; i++) {
+        if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+      }
+      if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+      byte * out = new byte[9];
+      for (int i = 0; i < 9; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+      inputFIFO_len -= 9;
+      inputFIFO_head = (inputFIFO_head + 9) % MAX_INPUT_FIFO;
+      return out;  
+      break;
+      
+      default:
+      break;
+    }
+    inputFIFO_head = (inputFIFO_head + 1) % MAX_INPUT_FIFO;
+    inputFIFO_len--;
+  }
+}
+
+bool isChild(uint32_t id) {
+  
 }
 
 // INTERRUPTS
@@ -109,13 +209,13 @@ void IRAM_ATTR broadcastTimerInterrupt() {
 void IRAM_ATTR packetReceive() {
   while (Serial2.available()) {
     byte tmp = Serial2.read();
-    if (inputFIFO_len >= MAX_RX_FIFO) {
-      inputFIFO_head = (inputFIFO_head + 1) % MAX_RX_FIFO;
+    if (inputFIFO_len >= MAX_INPUT_FIFO) {
+      inputFIFO_head = (inputFIFO_head + 1) % MAX_INPUT_FIFO;
     }
     else {
       inputFIFO_len++;
     }
-    int t = (inputFIFO_head + inputFIFO_len) % MAX_RX_FIFO;
+    int t = (inputFIFO_head + inputFIFO_len) % MAX_INPUT_FIFO;
     inputFIFO[t] = tmp;
   }
 }

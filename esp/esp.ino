@@ -25,6 +25,9 @@ void loop() {
     case STATE_SEARCH:
     STATE = func_search();
     break;
+    case STATE_STEADY:
+    STATE = func_steady();
+    break;
     default:
     Serial.println("Fatal Error in the state machine. Please reboot.");
     STATE = func_sleep();

@@ -11,7 +11,7 @@
 #define MAX_WAIT 800
 #define MIN_WAIT 200
 #define MAX_BC_FIFO 24
-#define MAX_RX_FIFO 512
+#define MAX_INPUT_FIFO 512
 
 #define TIMER_PRESCALER 80
 #define TIMER_MULTIPLIER 1000
@@ -42,7 +42,7 @@ extern byte deviceID[4];
 extern byte AESKey[16];
 
 extern byte inputFIFO[512];
-extern packet broadcastFIFO[MAX_FIFO]; // The global broadcast FIFO
+extern packet broadcastFIFO[MAX_BC_FIFO]; // The global broadcast FIFO
 
 extern byte payloadBuffer[240];
 extern byte encBuffer[240];
@@ -60,7 +60,8 @@ extern Preferences preferences;
 void schedule_broadcast(byte * packet, uint8_t len);
 void setBroadcastTimer();
 void broadcastPacket();
-void parseHeader(byte * out, uint8_t flags);
+byte * parseHeader(uint8_t flags);
+bool isChild(byte * id);
 
 // INTERRUPTS
 
