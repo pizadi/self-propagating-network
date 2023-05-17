@@ -15,7 +15,7 @@ def main():
     parser.add_argument('-C', '--configure', action='store_true', help='configures a board using a config file')
     parser.add_argument('-f', '--file', type=str, help='file to save the config')
     # parser.add_argument('-p', '--port', type=str, help='target COM port to be used')
-    parser.add_argument('-k', '--key', type=str, help='128-bit AES key in HEX format')
+    parser.add_argument('-s', '--secret', type=str, help='240-bit SECRET in HEX format')
     parser.add_argument('-i', '--id', type=str, help='network id in hex format')
     # parser.add_argument('-b', '--baud-rate', type=str, help='baud rate')
     # parser.add_argument('-s', '--server', type=str, help='server address and port')
@@ -24,12 +24,12 @@ def main():
     # ARGUEMENT CHECKS AND ASSIGNMENTS
     conf_packet = b''
 
-    # GETS THE AES KEY
+    # GETS THE SECRET
     if (args.generate and args.key is None):
-        conf_packet += bytes.fromhex(secrets.token_hex(16))
+        conf_packet += bytes.fromhex(secrets.token_hex(30))
     elif (args.generate):
         try:
-            if (len(args.key) > 32):
+            if (len(args.key) > 60):
                 raise ValueError
             else:
                 conf_packet += bytes.fromhex(args.key)
@@ -56,7 +56,7 @@ def main():
 
             fptr = open(args.file, 'rb')
             cont = fptr.read()
-            if (len(cont) != 20):
+            if (len(cont) != 34):
                 print(f'invalid config file')
             else:
                 conf_packet = cont

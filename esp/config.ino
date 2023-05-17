@@ -15,7 +15,7 @@ void func_config() {
     i++;
   }
   if (strcmp(password, passBuffer) == 0) {
-    if (Serial.available() != 20) {
+    if (Serial.available() != 34) {
       while (Serial.available()) Serial.read();
       Serial.print("WRPK");
       Serial.flush();
@@ -23,12 +23,12 @@ void func_config() {
       return;
     }
     
-    for (int i = 0; i < 16; i++) AESKey[i] = Serial.read();
+    for (int i = 0; i < 30; i++) secret[i] = Serial.read();
     for (int i = 0; i < 4; i++) networkID[i] = Serial.read();
     
     preferences.begin("config", false);
     preferences.clear();
-    preferences.putBytes("KEY", (void *) AESKey, 16);
+    preferences.putBytes("KEY", (void *) secret, 30);
     preferences.putBytes("ID", (void *) networkID, 4);
     preferences.end();
     Serial.print("DONE");

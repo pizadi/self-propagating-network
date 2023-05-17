@@ -7,7 +7,7 @@
 int func_boot() {
   preferences.begin("config", true);
   if (preferences.isKey("KEY") && preferences.isKey("ID")) {
-    if (preferences.getBytes("KEY", AESKey, 16) == 16 && preferences.getBytes("ID", networkID, 4) == 4) {
+    if (preferences.getBytes("KEY", secret, 30) == 30 && preferences.getBytes("ID", networkID, 4) == 4) {
       Serial.println("Info: Configuration loaded successfully.");
     }
     else {

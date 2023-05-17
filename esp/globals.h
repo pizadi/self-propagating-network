@@ -33,13 +33,15 @@ extern int inputFIFO_head; // Index for the transmission FIFO's head
 extern int inputFIFO_len; // Length of the transmission FIFO
 extern bool broadcastTimerIsSet; // Indicates whether the broadcast timer was already set
 extern hw_timer_t * broadcastTimer; // General Transmission timer
-extern uint32_t parent; // ID of the parent node
+extern hw_timer_t * globalTimer; // Global timer
+extern uint16_t tempID;
 
 // REGISTERS
 
 extern byte networkID[4];
 extern byte deviceID[4];
-extern byte AESKey[16];
+extern byte parentID[4];
+extern byte secret[30];
 
 extern byte inputFIFO[512];
 extern packet broadcastFIFO[MAX_BC_FIFO]; // The global broadcast FIFO
@@ -60,8 +62,10 @@ extern Preferences preferences;
 void schedule_broadcast(byte * packet, uint8_t len);
 void setBroadcastTimer();
 void broadcastPacket();
-byte * parseHeader(uint8_t flags);
+byte * parseHead(uint8_t flags);
 bool isChild(byte * id);
+void overrideParent(byte * current, byte * candidate);
+void setParent();
 
 // INTERRUPTS
 

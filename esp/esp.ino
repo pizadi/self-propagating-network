@@ -9,8 +9,10 @@ void setup() {
   Serial.onReceive(func_config, true);
   Serial2.onReceive(packetReceive, false);
   broadcastTimer = timerBegin(0, TIMER_PRESCALER, true);
+  globalTimer = timerBegin(1, TIMER_PRESCALER, true);
   timerAttachInterrupt(broadcastTimer, &broadcastTimerInterrupt, true);
-  STATE = 1;
+  tempID = esp_random();
+  STATE = STATE_BOOT;
 }
 
 void loop() {
@@ -29,7 +31,8 @@ void loop() {
     STATE = func_steady();
     break;
     default:
-    Serial.println("Fatal Error in the state machine. Please reboot.");
+    Serial.println("Fatal Error in the state machine. Trying to reboot...");
+    ESP.restart();
     STATE = func_sleep();
     break;
   }
