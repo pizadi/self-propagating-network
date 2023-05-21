@@ -15,7 +15,7 @@ void func_config() {
     i++;
   }
   if (strcmp(password, passBuffer) == 0) {
-    if (Serial.available() != 34) {
+    if (Serial.available() != 38) {
       while (Serial.available()) Serial.read();
       Serial.print("WRPK");
       Serial.flush();

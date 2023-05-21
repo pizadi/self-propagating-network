@@ -7,6 +7,7 @@ import serial
 from serial.tools.list_ports import comports
 import secrets
 import getpass
+import time
 
 def main():
     parser = argparse.ArgumentParser(description='A helper program to configure SPRN ESP32 modules')
@@ -25,14 +26,14 @@ def main():
     conf_packet = b''
 
     # GETS THE SECRET
-    if (args.generate and args.key is None):
+    if (args.generate and args.secret is None):
         conf_packet += bytes.fromhex(secrets.token_hex(30))
     elif (args.generate):
         try:
-            if (len(args.key) > 60):
+            if (len(args.secret) > 60):
                 raise ValueError
             else:
-                conf_packet += bytes.fromhex(args.key)
+                conf_packet += bytes.fromhex(args.secret)
         except ValueError:
             print(f'Invalid AES key.')
             return
@@ -100,7 +101,7 @@ def main():
 
         # GET DEVICE PASSWORD FROM USER
         passwd = getpass.getpass(f'Enter the module\'s password: ')
-        packet = bytes(passwd, 'ASCII') + b'\0' +conf_packet
+        packet = bytes(passwd, 'ASCII') + b'\0' + conf_packet + int(time.time()).to_bytes(4, byteorder='big')
 
         # SEND CONFIG PACKET TO DEVICE AND PRINT THE RESPONSE
         ser.write(packet)

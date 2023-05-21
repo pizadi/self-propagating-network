@@ -15,3 +15,4 @@ server/build/*
 
 utils/py-config/*.conf
 utils/py-listener/*.bin
+utils/py-listener/*.conf
