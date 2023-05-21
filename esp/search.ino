@@ -1,28 +1,35 @@
 #include <Preferences.h>
-
 #include "states.h"
 #include "globals.h"
 
 
 int func_search() {
-  if (inputFIFO_len > 0) {
+  byte bestCandidate[4] = {0x00, 0x00, 0x00, 0x00};
+  while (inputFIFO_len > 0) {
     byte header[16];
-    parseHead(header, HEADER_ADP);
-    if (header[0]) {
-      // TODO
-      // set parent, send ACK packet, and go to stable state
-      parent = header[8] + ((uint32_t) header[7] << 8) + ((uint32_t) header[6] << 16) + ((uint32_t) header[5] << 24);
-      // send ACK packet
-      return STATE_STEADY;
+    header = parseHead(header, HEADER_ADP);
+    if (header) {
+      // set parent
+      overrideID(bestCandidate, header);
+      delete[] header;
     }
-    else {
-    }
+    else break;
+  }
+  if (bestCandidate[0] | bestCandidate[1] | bestCandidate[2] | bestCandidate[3]){
+    for (int i = 0; i < 4; i++) deviceID[i] = bestCandidate[i];
+    setParent();
+    messageBuffer[0] = HEADER_CHECK;
+    for (int i = 0; i < 4; i++) messageBuffer[1+i] = networkID[i];
+    for (int i = 0; i < 4; i++) messageBuffer[5+i] = deviceID[i];
+    schedule_broadcast(messageBuffer, 9);
+    return STATE_STEADY;
   }
   Serial.println("Searching for a parent node.");
-  messageBuffer[0] = 2;
+  messageBuffer[0] = HEADER_SRCH;
   for (int i = 0; i < 4; i++) messageBuffer[1+i] = networkID[i];
-  for (int i = 5; i < 9; i++) messageBuffer[i] = 0;
-  schedule_broadcast(messageBuffer, 9);
-  delay(1000);
+  messageBuffer[5] = tempID >> 8;
+  messageBuffer[6] = tempID;
+  schedule_broadcast(messageBuffer, 7);
+  delay(10000);
   return STATE_SEARCH;
 }

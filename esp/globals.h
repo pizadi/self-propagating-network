@@ -66,6 +66,7 @@ byte * parseHead(uint8_t flags);
 bool isChild(byte * id);
 void overrideParent(byte * current, byte * candidate);
 void setParent();
+void decrypt(byte * IV, byte * src, uint8_t len, byte * out);
 
 // INTERRUPTS
 

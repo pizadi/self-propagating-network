@@ -180,16 +180,16 @@ byte * parseHead(uint8_t flags = 0xFF) {
         break;
 
       case HEADER_ADP:
-        if (inputFIFO_len < 15) return NULL;
+        if (inputFIFO_len < 32) return NULL;
         for (int i = 0; i < 4; i++) {
           if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
         }
         uint16_t adpID = (uint16_t) inputFIFO[(inputFIFO_head + 13) % MAX_INPUT_FIFO] << 8 + inputFIFO[(inputFIFO_head + 14) % MAX_INPUT_FIFO];
         if (adpID != tempID) break;
-        out = new byte[9];
-        for (int i = 0; i < 9; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
-        inputFIFO_len -= 9;
-        inputFIFO_head = (inputFIFO_head + 9) % MAX_INPUT_FIFO;
+        out = new byte[16];
+        for (int i = 0; i < 16; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+        inputFIFO_len -= 32;
+        inputFIFO_head = (inputFIFO_head + 32) % MAX_INPUT_FIFO;
         return out;
         break;
     }
@@ -203,10 +203,11 @@ bool isChild(byte * id) {
 }
 
 void overrideParent(byte * current, byte * candidate) {
-  if (candidate[0] | candidate[1] | candidate[2] | candidate[3] == 0) return;
+  if (candidate[1] | candidate[2] | candidate[3] | candidate[4] == 0) return;
   for (int i = 0; i < 16; i++) {
     if (current[i / 4] & (0XC0 >> (i%4)) == 0) {
       if (candidate[i / 4] & (0XC0 >> (i%4))) {
+        // CHECK TIME
         for (int j = 0; j < 4; j++) current[j] = candidate[j];
       }
       else break;
@@ -221,6 +222,15 @@ void setParent() {
       parentID[i/4] = parentID[i/4] & (!(0xC0 >> (i%4)));
       return;
     }
+  }
+}
+
+void decrypt(byte * IV, byte * src, uint8_t len, byte * out) {
+  byte keys[15][16];
+  mbedtls_aes_init(&aesctx);
+  mbedtls_aes_setkey_enc(&aesctx, IV, 128);
+  for (int i = 0; i < len / 16; i ++) {
+    mbedtls_aes_crypt_ecb(&aesctx, MBEDTLS_AES_ENCRYPT, secret+i, keys[i]);
   }
 }
 
