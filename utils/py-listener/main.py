@@ -16,12 +16,13 @@ HEADER_CMD = 1 << 3
 HEADER_SRCH = 1 << 4
 HEADER_ADP = 1 << 5
 
+
+
+children = [{'SEQ' : -1, 'TIMER' : -1, 'TIMEOUTS' : 0, 'TMPID' : -1},
+            {'SEQ' : -1, 'TIMER' : -1, 'TIMEOUTS' : 0, 'TMPID' : -1},
+            {'SEQ' : -1, 'TIMER' : -1, 'TIMEOUTS' : 0, 'TMPID' : -1}] # Use classes
 MAX_DELAY = 30
-
-children = [{'TIMER' : -1, 'TIMEOUTS' : 0, 'TMPID' : -1},
-            {'TIMER' : -1, 'TIMEOUTS' : 0, 'TMPID' : -1},
-            {'TIMER' : -1, 'TIMEOUTS' : 0, 'TMPID' : -1}] # timeouts for child nodes
-
+MIN_WAIT, MAX_WAIT = 100, 600
 TIMEOUT = .1
 output_file = None
 secret = None
@@ -121,10 +122,13 @@ def parseHead(buffer : bytes) -> Union[int, bytes]:
     version of the packet will be returned.
     """
     blen = len(buffer)
-    if (blen < 16):
+    if (blen < 24):
         return 0
     
     packlen = buffer[0]
+
+    if (packlen % 16 != 0):
+        return 1
 
     if (blen < packlen + 8):
         return 0
@@ -181,7 +185,8 @@ def validity_check(packet : bytes) -> int:
     packet is valid but irrelevent due to timeouts or being directed to another node, the
     funciton will return 0. If the packet is completely invalid, the function will return -1.
     """
-    typecode = packet[0]
+    seq = packet[5:8]
+    typecode = packet[8]
     device_id = packet[9:13] if (typecode != HEADER_SRCH) else None
     timestamp = packet[-4:]
 
@@ -197,7 +202,6 @@ def validity_check(packet : bytes) -> int:
 
         payload = packet[18:plen+18]
         crc32 = packet[plen+18:plen+22]
-        timestamp = packet[-4:]
         if (not valid_id(device_id)):
             return -1
         
@@ -265,12 +269,12 @@ def validity_check(packet : bytes) -> int:
         return 0 # The main node does not receive ADP packets
 
     if (not is_child(device_id)):
-        return 0 # External packet
+        return 0 # Irrelevent packet
 
     if (not valid_time(timestamp)):
         return 0 # Outdated packet
 
-    if (not valid_seq(seq_number, device_id)):
+    if (not valid_seq(seq, device_id)):
         return 0 # Outdated packet
     
     return typecode
@@ -296,13 +300,12 @@ def valid_id(id : bytes) -> bool:
     """
     flag = False
     for i in range(16):
-        t = id[i//4] & (0b11000000 >> (i%4))
+        t = id[i//4] & (0b11000000 >> 2*(i%4))
         if (not flag and t == 0):
             flag = True
         elif (flag and t > 0):
             return False
     return True
-
 
 def is_child(id : bytes) -> bool:
     """
