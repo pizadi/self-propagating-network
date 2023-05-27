@@ -57,7 +57,7 @@ int validityCheck(byte * in, uint8_t len) {
     for (int i = 0; i < 4; i++) device_id[i] = in[9+i]; 
   }
   for (int i = 0; i < 4; i++) timestamp[i] = in[len-i-1];
-  for (int i = 0; i < 3; i++) seq[3] = packet[5+i]
+  for (int i = 0; i < 3; i++) seq[3] = in[5+i];
 
   if (typecode != HEADER_MSG && typecode != HEADER_CHECK && typecode != HEADER_ACK && typecode != HEADER_CMD && typecode != HEADER_SRCH && typecode != HEADER_ADP) return -1;
   if (typecode == HEADER_MSG) {
@@ -67,7 +67,7 @@ int validityCheck(byte * in, uint8_t len) {
     if (plen > len - 26) return -1;
 
     for (int i = 0; i < plen; i++) payload[i] = in[18+i];
-    for (int i = 0; i < 4; i++) crc[i] = in[22+i];
+    for (int i = 0; i < 4; i++) crc32[i] = in[22+i];
 
     if (!idCheck(device_id)) return -1;
     if (!idCheck(origin_id)) return -1;
@@ -82,7 +82,7 @@ int validityCheck(byte * in, uint8_t len) {
 
   if (typecode == HEADER_ACK) {
     byte seq_number[3];
-    for (int i = 0; i < 3; i++) seq_number[i] = packet[13+i];
+    for (int i = 0; i < 3; i++) seq_number[i] = in[13+i];
     if (!idCheck(device_id)) return -1;
     for (int i = 16; i < len-4; i++) if (in[i] != 0) return -1;
   }
@@ -94,7 +94,7 @@ int validityCheck(byte * in, uint8_t len) {
     if (plen > len - 26) return -1;
 
     for (int i = 0; i < plen; i++) payload[i] = in[18+i];
-    for (int i = 0; i < 4; i++) crc[i] = in[22+i];
+    for (int i = 0; i < 4; i++) crc32[i] = in[22+i];
 
     if (!idCheck(device_id)) return -1;
     if (!idCheck(target_id)) return -1;
@@ -105,13 +105,13 @@ int validityCheck(byte * in, uint8_t len) {
 
   if (typecode == HEADER_SRCH) {
     byte temp_id[2];
-    for (int i = 0; i < 2; i++) temp_id[i] = packet[9+i];
+    for (int i = 0; i < 2; i++) temp_id[i] = in[9+i];
 
   }
 
   if (typecode == HEADER_ADP) {
     byte temp_id[2];
-    for (int i = 0; i < 2; i++) temp_id[i] = packet[13+i];
+    for (int i = 0; i < 2; i++) temp_id[i] = in[13+i];
 
   }
   if (typecode != HEADER_SRCH && !childCheck(device_id)) return 0;
@@ -155,6 +155,11 @@ bool idCheck(byte * id) {
     else if (flag && t > 0) return false;
   }
   return true;
+}
+
+
+bool seqCheck(byte * seq, byte * device_id) {
+  
 }
 
 bool childCheck(byte * id) {
