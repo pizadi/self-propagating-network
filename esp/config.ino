@@ -1,5 +1,7 @@
 #include <Preferences.h>
 #include <string.h>
+#include <Wire.h>
+#include <RTClib.h>
 
 #include "states.h"
 #include "globals.h"
@@ -9,6 +11,7 @@
 void func_config() {
   char passBuffer[236];
   uint8_t i = 0;
+  uint32_t t = 0;
   while (Serial.available() && i < 256) {
     passBuffer[i] = Serial.read();
     if (passBuffer[i] == '\0') break;
@@ -25,6 +28,9 @@ void func_config() {
     
     for (int i = 0; i < 30; i++) secret[i] = Serial.read();
     for (int i = 0; i < 4; i++) networkID[i] = Serial.read();
+    for (int i = 0; i < 4; i++) t = (t << 8) + Serial.read();
+
+    rtc.adjust(DateTime(t));
     
     preferences.begin("config", false);
     preferences.clear();

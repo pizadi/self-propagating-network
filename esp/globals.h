@@ -1,6 +1,8 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
+#include <RTClib.h>
 #include <mbedtls/aes.h>
+#include <mbedtls/sha256.h>
 #include <Preferences.h>
 #include "esp_system.h"
 
@@ -55,6 +57,8 @@ extern char debugInterrupt[192];
 // OBJECTS
 
 extern mbedtls_aes_context aesctx;
+extern mbedtls_sha256_context shactx;
+extern RTC_DS1307 rtc;
 extern Preferences preferences;
 
 // FUNCTIONS
@@ -66,7 +70,6 @@ byte * parseHead(uint8_t flags);
 bool isChild(byte * id);
 void overrideParent(byte * current, byte * candidate);
 void setParent();
-void decrypt(byte * IV, byte * src, uint8_t len, byte * out);
 
 // INTERRUPTS
 

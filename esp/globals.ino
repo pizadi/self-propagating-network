@@ -1,4 +1,6 @@
+#include <RTClib.h>
 #include <mbedtls/aes.h>
+#include <mbedtls/sha256.h>
 #include <Preferences.h>
 #include <esp_random.h>
 
@@ -40,7 +42,9 @@ char debugInterrupt[192];
 // OBJECTS
 
 mbedtls_aes_context aesctx;
+mbedtls_sha256_context shactx;
 Preferences preferences;
+RTC_DS1307 rtc;
 
 // FUNCTIONS
 
@@ -222,15 +226,6 @@ void setParent() {
       parentID[i/4] = parentID[i/4] & (!(0xC0 >> (i%4)));
       return;
     }
-  }
-}
-
-void decrypt(byte * IV, byte * src, uint8_t len, byte * out) {
-  byte keys[15][16];
-  mbedtls_aes_init(&aesctx);
-  mbedtls_aes_setkey_enc(&aesctx, IV, 128);
-  for (int i = 0; i < len / 16; i ++) {
-    mbedtls_aes_crypt_ecb(&aesctx, MBEDTLS_AES_ENCRYPT, secret+i, keys[i]);
   }
 }
 

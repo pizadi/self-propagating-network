@@ -11,7 +11,6 @@ void setup() {
   broadcastTimer = timerBegin(0, TIMER_PRESCALER, true);
   globalTimer = timerBegin(1, TIMER_PRESCALER, true);
   timerAttachInterrupt(broadcastTimer, &broadcastTimerInterrupt, true);
-  tempID = esp_random();
   STATE = STATE_BOOT;
 }
 
