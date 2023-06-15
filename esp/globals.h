@@ -24,7 +24,15 @@
 typedef struct {
   uint8_t len;
   byte * message;
+  uint32_t seq;
 } packet;
+
+typedef struct {
+  uint8_t timeouts;
+  uint32_t lastTransmission;
+  uint16_t tempID;
+  uint32_t seq;
+} node;
 
 // VARIABLES
 
@@ -38,6 +46,7 @@ extern bool broadcastTimerIsSet; // Indicates whether the broadcast timer was al
 extern hw_timer_t * broadcastTimer; // General Transmission timer
 extern hw_timer_t * globalTimer; // Global timer
 extern uint16_t tempID;
+extern uint32_t seq;
 
 // REGISTERS
 
@@ -48,6 +57,7 @@ extern byte secret[30];
 
 extern byte inputFIFO[512];
 extern packet broadcastFIFO[MAX_BC_FIFO]; // The global broadcast FIFO
+extern node neighbors[4];
 
 extern byte payloadBuffer[240];
 extern byte encBuffer[240];
@@ -67,10 +77,12 @@ extern Preferences preferences;
 void schedule_broadcast(byte * packet, uint8_t len);
 void setBroadcastTimer();
 void broadcastPacket();
-byte * parseHead(uint8_t flags);
-bool isChild(byte * id);
-void overrideParent(byte * current, byte * candidate);
-void setParent();
+// byte * parseHead(uint8_t flags);
+// bool isChild(byte * id);
+// void overrideParent(byte * current, byte * candidate);
+// void setParent();
+void encrypt(byte * salt, byte * src, uint8_t len, byte * out);
+
 
 // INTERRUPTS
 

@@ -8,5 +8,6 @@ bool crcCheck(byte * str, uint8_t len, byte * crc);
 bool timeCheck(byte * timest);
 bool idCheck(byte * id);
 bool seqCheck(byte * seq, byte * device_id);
-bool childCheck(byte * id);
+bool selfCheck(byte * id);
+int getRel(byte * id);
 #endif

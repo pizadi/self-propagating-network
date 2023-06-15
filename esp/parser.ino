@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "globals.h"
 #include "utils.h"
+#include <cstdint>
 #include <esp32/rom/crc.h>
 
 int parseHead(byte * out, uint8_t flags = 0xFF) {
@@ -114,7 +115,7 @@ int validityCheck(byte * in, uint8_t len) {
     for (int i = 0; i < 2; i++) temp_id[i] = in[13+i];
 
   }
-  if (typecode != HEADER_SRCH && !childCheck(device_id)) return 0;
+  if (typecode != HEADER_SRCH && !compareBytes(device_id, deviceID, 4)) return 0;
   if (!timeCheck(timestamp)) return 0;
   if (!seqCheck(seq, device_id)) return 0;
   return typecode;
@@ -125,7 +126,7 @@ void decrypt(byte * salt, byte * src, uint8_t len, byte * out) {
   byte key[32];
   mbedtls_sha256_starts(&shactx, 0);
   mbedtls_sha256_update(&shactx, secret, 30);
-  mbedtls_sha256_update(&shactx, salt, 30);
+  mbedtls_sha256_update(&shactx, salt, 8);
   mbedtls_sha256_finish(&shactx, key);
   // Decryption
   mbedtls_aes_setkey_dec(&aesctx, key, 256);
@@ -159,9 +160,43 @@ bool idCheck(byte * id) {
 
 
 bool seqCheck(byte * seq, byte * device_id) {
-  
+  uint32_t inSeq = 0;
+  for (int i = 0; i < 3; i++) inSeq = (inSeq << 8) + seq[i];
+  int rel = getRel(device_id);
+  if (rel < 0 || rel > 3) return false;
+  uint32_t lastSeq = neighbors[rel].seq;
+  bool valid = false;
+  valid = valid || (inSeq - lastSeq < 128);
+  if ((1 << 23) - lastSeq < 128) {
+    valid = valid || (inSeq < (128 + lastSeq - (1 << 23)));
+  }
+  return valid;
 }
 
-bool childCheck(byte * id) {
-
+int getRel(byte * id) {
+  int flag = 0;
+  int retval = 0;
+  for (int i = 0; i < 16; i++) {
+    uint8_t src = deviceID[i/4] & (0b11 << (2*(i%4)));
+    uint8_t trg = id[i/4] & (0b11 << (2*(i%4)));
+    if (flag == 0){
+      if (src == 0 && trg != 0) {
+        flag = 1;
+        retval = trg >> (2 * (i%4));
+      }
+      else if (src && trg == 0) {
+        flag = 2;
+      }
+      else if (src != trg) {
+        return -1;
+      }
+    }
+    else if (flag == 1){
+      if (trg || src) return -1;
+    }
+    else if (flag == 2){
+      if (trg || src) return -1;
+    }
+  }
+  return retval;
 }

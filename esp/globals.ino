@@ -1,4 +1,5 @@
 #include <RTClib.h>
+#include <cstdint>
 #include <mbedtls/aes.h>
 #include <mbedtls/sha256.h>
 #include <Preferences.h>
@@ -21,6 +22,7 @@ bool broadcastTimerIsSet = false;
 hw_timer_t * broadcastTimer = NULL;
 hw_timer_t * globalTimer = NULL;
 uint16_t tempID;
+uint32_t seq;
 
 // REGISTERS
 
@@ -32,6 +34,7 @@ byte secret[30];
 
 byte inputFIFO[512]; // Radio Input FIFO
 packet broadcastFIFO[MAX_BC_FIFO]; // The global broadcast FIFO
+node neighbors[4];
 
 byte payloadBuffer[240];
 byte encBuffer[240];
@@ -78,9 +81,23 @@ void setBroadcastTimer() {
 void broadcastPacket() {
   byte * packet = broadcastFIFO[broadcastFIFO_head].message;
   int len = broadcastFIFO[broadcastFIFO_head].len;
+  uint32_t control = rtc.now().unixtime();
+  byte tmppacket[248];
+  for (int i = 0; i < 8; i++) tmppacket[i] = packet[i];
+  uint32_t tmpseq = seq;
+  for (int i = 0; i < 3; i++) {
+    packet[7-i] = tmpseq & 0xFF;
+    tmpseq = tmpseq >> 8;
+  }
+  seq = (seq + 1) % (1 << 24);
+  for (int i = 0; i < 4; i++) {
+    packet[len-1-i] = control & 0xFF;
+    control = control >> 8;
+  }
+  encrypt(tmppacket, tmppacket + 8, len - 8, tmppacket + 8);
   for (int i = 0; i < len; i++) {
     while (Serial2.availableForWrite() == 0); // Risk of infinite loop in case of radio module malfunction, rewrite later
-    Serial2.write(packet[i]);
+    Serial2.write(tmppacket[i]);
   }
   Serial2.flush();
   Serial.println("Packet sent.");
@@ -91,143 +108,156 @@ void broadcastPacket() {
   if (broadcastFIFO_len > 0) setBroadcastTimer();
 }
 
-byte * parseHead(uint8_t flags = 0xFF) {
-  // TODO
-  // Parses the input and searches for a header of the type flag
-  while (inputFIFO_len > 0) {
-    while (inputFIFO[inputFIFO_head] & flags == 0) {
-      inputFIFO_head = (inputFIFO_head + 1) % MAX_INPUT_FIFO;
-      inputFIFO_len--;
-    }
-    byte * out = NULL;
-    uint16_t msglen = 0;
-    switch (inputFIFO[inputFIFO_head]) {
-      case HEADER_MSG:
-        if (inputFIFO_len < 16) return out;
-        for (int i = 0; i < 4; i++) {
-          if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
-        }
-        if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
-        msglen = inputFIFO[(inputFIFO_head + 9) % MAX_INPUT_FIFO] + 16;
-        if (inputFIFO_len < msglen) return NULL;
-        out = new byte[msglen];
-        for (int i = 0; i < msglen; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
-        inputFIFO_len -= msglen;
-        inputFIFO_head = (inputFIFO_head + msglen) % MAX_INPUT_FIFO;
-        return out;
-        break;
-
-      case HEADER_CHECK:
-        if (inputFIFO_len < 9) return NULL;
-        for (int i = 0; i < 4; i++) {
-          if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
-        }
-        if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
-        out = new byte[9];
-        for (int i = 0; i < 9; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
-        inputFIFO_len -= 9;
-        inputFIFO_head = (inputFIFO_head + 9) % MAX_INPUT_FIFO;
-        return out;
-        break;
-
-      case HEADER_ACK:
-        if (inputFIFO_len < 14) return NULL;
-        for (int i = 0; i < 4; i++) {
-          if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
-        }
-        if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
-        out = new byte[14];
-        for (int i = 0; i < 14; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
-        inputFIFO_len -= 14;
-        inputFIFO_head = (inputFIFO_head + 14) % MAX_INPUT_FIFO;
-        return out;
-        break;
-
-      case HEADER_NACK:
-        if (inputFIFO_len < 9) return NULL;
-        for (int i = 0; i < 4; i++) {
-          if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
-        }
-        if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
-        out = new byte[9];
-        for (int i = 0; i < 9; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
-        inputFIFO_len -= 9;
-        inputFIFO_head = (inputFIFO_head + 9) % MAX_INPUT_FIFO;
-        return out;
-        break;
-
-      case HEADER_CMD:
-        if (inputFIFO_len < 16) return NULL;
-        for (int i = 0; i < 4; i++) {
-          if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
-        }
-        if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
-        msglen = inputFIFO[(inputFIFO_head + 9) % MAX_INPUT_FIFO] + 16;
-        if (inputFIFO_len < msglen) return NULL;
-        out = new byte[msglen];
-        for (int i = 0; i < msglen; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
-        inputFIFO_len -= msglen;
-        inputFIFO_head = (inputFIFO_head + msglen) % MAX_INPUT_FIFO;
-        return out;
-        break;
-
-      case HEADER_SRCH:
-        if (inputFIFO_len < 7) return NULL;
-        for (int i = 0; i < 4; i++) {
-          if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
-        }
-        out = new byte[7];
-        for (int i = 0; i < msglen; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
-        inputFIFO_len -= 7;
-        inputFIFO_head = (inputFIFO_head + 7) % MAX_INPUT_FIFO;
-        return out;
-        break;
-
-      case HEADER_ADP:
-        if (inputFIFO_len < 32) return NULL;
-        for (int i = 0; i < 4; i++) {
-          if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
-        }
-        uint16_t adpID = (uint16_t) inputFIFO[(inputFIFO_head + 13) % MAX_INPUT_FIFO] << 8 + inputFIFO[(inputFIFO_head + 14) % MAX_INPUT_FIFO];
-        if (adpID != tempID) break;
-        out = new byte[16];
-        for (int i = 0; i < 16; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
-        inputFIFO_len -= 32;
-        inputFIFO_head = (inputFIFO_head + 32) % MAX_INPUT_FIFO;
-        return out;
-        break;
-    }
-    inputFIFO_head = (inputFIFO_head + 1) % MAX_INPUT_FIFO;
-    inputFIFO_len--;
-  }
+void encrypt(byte * salt, byte * src, uint8_t len, byte * out) {
+  byte key[32];
+  mbedtls_sha256_starts(&shactx, 0);
+  mbedtls_sha256_update(&shactx, secret, 30);
+  mbedtls_sha256_update(&shactx, salt, 8);
+  mbedtls_sha256_finish(&shactx, key);
+  // Encryption
+  mbedtls_aes_setkey_dec(&aesctx, key, 256);
+  byte iv[16];
+  for (int i = 0; i < 16; i++) iv[i] = 0;
+  mbedtls_aes_crypt_cbc(&aesctx, MBEDTLS_AES_ENCRYPT, len, iv, src, out);
 }
 
-bool isChild(byte * id) {
-  return true;
-}
+// byte * parseHead(uint8_t flags = 0xFF) {
+//   // TODO
+//   // Parses the input and searches for a header of the type flag
+//   while (inputFIFO_len > 0) {
+//     while (inputFIFO[inputFIFO_head] & flags == 0) {
+//       inputFIFO_head = (inputFIFO_head + 1) % MAX_INPUT_FIFO;
+//       inputFIFO_len--;
+//     }
+//     byte * out = NULL;
+//     uint16_t msglen = 0;
+//     switch (inputFIFO[inputFIFO_head]) {
+//       case HEADER_MSG:
+//         if (inputFIFO_len < 16) return out;
+//         for (int i = 0; i < 4; i++) {
+//           if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+//         }
+//         if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+//         msglen = inputFIFO[(inputFIFO_head + 9) % MAX_INPUT_FIFO] + 16;
+//         if (inputFIFO_len < msglen) return NULL;
+//         out = new byte[msglen];
+//         for (int i = 0; i < msglen; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+//         inputFIFO_len -= msglen;
+//         inputFIFO_head = (inputFIFO_head + msglen) % MAX_INPUT_FIFO;
+//         return out;
+//         break;
 
-void overrideParent(byte * current, byte * candidate) {
-  if (candidate[1] | candidate[2] | candidate[3] | candidate[4] == 0) return;
-  for (int i = 0; i < 16; i++) {
-    if (current[i / 4] & (0XC0 >> (i%4)) == 0) {
-      if (candidate[i / 4] & (0XC0 >> (i%4))) {
-        // CHECK TIME
-        for (int j = 0; j < 4; j++) current[j] = candidate[j];
-      }
-      else break;
-    }
-  }
-}
+//       case HEADER_CHECK:
+//         if (inputFIFO_len < 9) return NULL;
+//         for (int i = 0; i < 4; i++) {
+//           if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+//         }
+//         if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+//         out = new byte[9];
+//         for (int i = 0; i < 9; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+//         inputFIFO_len -= 9;
+//         inputFIFO_head = (inputFIFO_head + 9) % MAX_INPUT_FIFO;
+//         return out;
+//         break;
 
-void setParent() {
-  for (int i = 0; i < 4; i++) parentID[i] = deviceID[i];
-  for (int i = 15; i > 0; i--) {
-    if (deviceID[i/4] & (0xC0 >> (i%4))) {
-      parentID[i/4] = parentID[i/4] & (!(0xC0 >> (i%4)));
-      return;
-    }
-  }
-}
+//       case HEADER_ACK:
+//         if (inputFIFO_len < 14) return NULL;
+//         for (int i = 0; i < 4; i++) {
+//           if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+//         }
+//         if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+//         out = new byte[14];
+//         for (int i = 0; i < 14; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+//         inputFIFO_len -= 14;
+//         inputFIFO_head = (inputFIFO_head + 14) % MAX_INPUT_FIFO;
+//         return out;
+//         break;
+
+//       case HEADER_NACK:
+//         if (inputFIFO_len < 9) return NULL;
+//         for (int i = 0; i < 4; i++) {
+//           if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+//         }
+//         if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+//         out = new byte[9];
+//         for (int i = 0; i < 9; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+//         inputFIFO_len -= 9;
+//         inputFIFO_head = (inputFIFO_head + 9) % MAX_INPUT_FIFO;
+//         return out;
+//         break;
+
+//       case HEADER_CMD:
+//         if (inputFIFO_len < 16) return NULL;
+//         for (int i = 0; i < 4; i++) {
+//           if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+//         }
+//         if (!isChild(&inputFIFO[(inputFIFO_head + 5) % MAX_INPUT_FIFO])) break;
+//         msglen = inputFIFO[(inputFIFO_head + 9) % MAX_INPUT_FIFO] + 16;
+//         if (inputFIFO_len < msglen) return NULL;
+//         out = new byte[msglen];
+//         for (int i = 0; i < msglen; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+//         inputFIFO_len -= msglen;
+//         inputFIFO_head = (inputFIFO_head + msglen) % MAX_INPUT_FIFO;
+//         return out;
+//         break;
+
+//       case HEADER_SRCH:
+//         if (inputFIFO_len < 7) return NULL;
+//         for (int i = 0; i < 4; i++) {
+//           if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+//         }
+//         out = new byte[7];
+//         for (int i = 0; i < msglen; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+//         inputFIFO_len -= 7;
+//         inputFIFO_head = (inputFIFO_head + 7) % MAX_INPUT_FIFO;
+//         return out;
+//         break;
+
+//       case HEADER_ADP:
+//         if (inputFIFO_len < 32) return NULL;
+//         for (int i = 0; i < 4; i++) {
+//           if (inputFIFO[(inputFIFO_head + 1 + i) % MAX_INPUT_FIFO] != networkID[i]) break;
+//         }
+//         uint16_t adpID = (uint16_t) inputFIFO[(inputFIFO_head + 13) % MAX_INPUT_FIFO] << 8 + inputFIFO[(inputFIFO_head + 14) % MAX_INPUT_FIFO];
+//         if (adpID != tempID) break;
+//         out = new byte[16];
+//         for (int i = 0; i < 16; i++) out[i] = inputFIFO[(inputFIFO_head + i) % MAX_INPUT_FIFO];
+//         inputFIFO_len -= 32;
+//         inputFIFO_head = (inputFIFO_head + 32) % MAX_INPUT_FIFO;
+//         return out;
+//         break;
+//     }
+//     inputFIFO_head = (inputFIFO_head + 1) % MAX_INPUT_FIFO;
+//     inputFIFO_len--;
+//   }
+// }
+
+// bool isChild(byte * id) {
+//   return true;
+// }
+
+// void overrideParent(byte * current, byte * candidate) {
+//   if (candidate[1] | candidate[2] | candidate[3] | candidate[4] == 0) return;
+//   for (int i = 0; i < 16; i++) {
+//     if (current[i / 4] & (0XC0 >> (i%4)) == 0) {
+//       if (candidate[i / 4] & (0XC0 >> (i%4))) {
+//         // CHECK TIME
+//         for (int j = 0; j < 4; j++) current[j] = candidate[j];
+//       }
+//       else break;
+//     }
+//   }
+// }
+
+// void setParent() {
+//   for (int i = 0; i < 4; i++) parentID[i] = deviceID[i];
+//   for (int i = 15; i > 0; i--) {
+//     if (deviceID[i/4] & (0xC0 >> (i%4))) {
+//       parentID[i/4] = parentID[i/4] & (!(0xC0 >> (i%4)));
+//       return;
+//     }
+//   }
+// }
 
 // INTERRUPTS
 
